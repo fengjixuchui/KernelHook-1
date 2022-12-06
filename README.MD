@@ -2,6 +2,10 @@
 
 + 这是一个用来在windows内核使用的inlinehook框架。本框架代码还在开发中，并不太完善，请谨慎使用。
 
+## 使用方法
+
++ 将 `zydis.h` `zydis.c` `asmcode.h` `asmcode.c` `hook.h` `hook.c` 包含到你的项目中，然后在需要使用到本框架的地方 `#include "hook.h"` 即可使用本框架。
+
 ## 大致hook流程
 
 + ![image-20221206161301914](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206161301914.png)
@@ -48,15 +52,47 @@
 
 ### 7X XX一字节短跳
 
-+ ![image-20221206174018926](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206174018926.png)
++ I![image-20221206174018926](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206174018926.png)S
 
   思路如下。将这个短跳的跳转地址改为 `jmp 到原函数里面的jx目标地址` 代码的地址。最后在执行完 `A B C` 之后通过一个 `EB` 短跳跳到原来的 `JMP D` 处。
 
-## 使用方法
+### 0F 8X XX XX XX XX四字节相对跳转
 
-+ 将 `zydis.h` `zydis.c` `asmcode.h` `asmcode.c` `hook.h` `hook.c` 包含到你的项目中，然后在需要使用到本框架的地方 `#include "hook.h"` 即可使用本框架。
++ 思路同上。
 
 ## 实例代码
+
++ handler函数的形式如下
+
+  ```c
+  BOOLEAN NtOpenProcess_callback(PGuestContext pcontext)
+  ```
+
+  其中返回值为FALSE表示执行完本函数后继续执行原来的函数。如果为true则不再执行原始的函数，直接返回。 `pcontext` 是一个指向之前保存的寄存器的指针。其结构如下
+
+  ```c
+  typedef struct _GuestContext
+  {
+  	ULONG64 mRax;
+  	ULONG64 mRcx;
+  	ULONG64 mRdx;
+  	ULONG64 mRbx;
+  	ULONG64 mRsp;
+  	ULONG64 mRbp;
+  	ULONG64 mRsi;
+  	ULONG64 mRdi;
+  	ULONG64 mR8;
+  	ULONG64 mR9;
+  	ULONG64 mR10;
+  	ULONG64 mR11;
+  	ULONG64 mR12;
+  	ULONG64 mR13;
+  	ULONG64 mR14;
+  	ULONG64 mR15;
+  }GuestContext, * PGuestContext;
+  ```
+
+  在handler函数中可以通过读取这些寄存器来获取调用的信息，**也可以通过修改这些寄存器达到修改调用方调用原函数时的调用参数的目的。**
 
 + 对于 `NtOpenProcess` 进行hook的示例代码如下
 
@@ -164,16 +200,17 @@
 + 本框架还在开发中，还有很多不完善的地方。由于汇编代码中有很多**使用相对地址的跳转指令**，如果在别的地方运行势必会导致出错。需要对这些指令逐个进行相应的处理。
 
 - [x] 处理硬编码为 `7x xx` 的一字节相对短跳
-- [ ] 处理硬编码为 `0f 7x xx xx xx xx` 的四字节相对跳转
+- [x] 处理硬编码为 `0f 8x xx xx xx xx` 的四字节相对跳转
 - [ ] 处理编码为 `ex xx xx xx xx` 的相对跳转指令
 - [ ] 处理其他使用了相对寻址的指令，如 `test，lea，mov` 等。
 - [ ] 使用SEH对函数大小进行判断，如果函数没有足够的空间，则返回失败
 - [ ] 如果函数已经被挂钩，要进行判断，防止运行了无法运行的代码导致抛出UD
 - [ ] 想办法对XMM寄存器也进行相应的保存。
+- [x] 保存环境的时候shellcode忘记加pushfq了，要加上。
 
 ## 依赖
 
-+ 本项目使用了 `https://github.com/oblique/insn_len` 和 `https://github.com/redis/redis` 两个项目作为依赖。
++ 本项目使用了 `https://github.com/oblique/insn_len` 和 `https://github.com/zyantific/zydis` 两个项目作为依赖。
 
 ## 如何贡献
 
