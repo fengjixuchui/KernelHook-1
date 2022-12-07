@@ -50,7 +50,7 @@
 
 ## 对使用了相对地址的汇编代码的处理方法
 
-### 7X XX一字节短跳
+### 7X XX && E1 xx && E2 xx && E3 xx && EB xx一字节短跳
 
 + I![image-20221206174018926](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206174018926.png)S
 
@@ -59,6 +59,10 @@
 ### 0F 8X XX XX XX XX四字节相对跳转
 
 + 思路同上。
+
+### E8 XX XX XX XX 四字节相对call，E9 XX XX XX XX四字节相对跳转
+
++ 思路同上
 
 ## 实例代码
 
@@ -73,6 +77,7 @@
   ```c
   typedef struct _GuestContext
   {
+      ULONG64 mRflags;
   	ULONG64 mRax;
   	ULONG64 mRcx;
   	ULONG64 mRdx;
@@ -199,14 +204,15 @@
 
 + 本框架还在开发中，还有很多不完善的地方。由于汇编代码中有很多**使用相对地址的跳转指令**，如果在别的地方运行势必会导致出错。需要对这些指令逐个进行相应的处理。
 
-- [x] 处理硬编码为 `7x xx` 的一字节相对短跳
+- [x] 处理硬编码为 `7X XX 或 E1 xx 或 E2 xx 或 E3 xx 或 EB xx` 的一字节相对短跳
 - [x] 处理硬编码为 `0f 8x xx xx xx xx` 的四字节相对跳转
-- [ ] 处理编码为 `ex xx xx xx xx` 的相对跳转指令
+- [x] 处理编码为 `e8(e9) xx xx xx xx` 的相对跳转指令
 - [ ] 处理其他使用了相对寻址的指令，如 `test，lea，mov` 等。
 - [ ] 使用SEH对函数大小进行判断，如果函数没有足够的空间，则返回失败
 - [ ] 如果函数已经被挂钩，要进行判断，防止运行了无法运行的代码导致抛出UD
 - [ ] 想办法对XMM寄存器也进行相应的保存。
 - [x] 保存环境的时候shellcode忘记加pushfq了，要加上。
+- [ ] 有可能出现别的地方跳到被hook的地方中间的情况，比如hook的时候修改了ABC三条指令，后面有代码跳转到了B这条指令的地址。由于已经inlinehook，这个地址上的内容已经不再是原来的代码，会引发不可预测的结果（无能为力了这个）
 
 ## 依赖
 
