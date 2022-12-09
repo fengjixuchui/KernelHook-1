@@ -50,7 +50,7 @@
 
 ## 对使用了相对地址的汇编代码的处理方法
 
-### 7X XX && E1 xx && E2 xx && E3 xx && EB xx一字节短跳
+### 7X XX && E0 xx && E1 xx && E2 xx && E3 xx && EB xx一字节短跳
 
 + I![image-20221206174018926](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206174018926.png)S
 
@@ -113,6 +113,10 @@
   {
   	KdPrintEx((77, 0, "unload\r\n"));
   	reset_hook(num);
+      // 重置hook之后不要马上卸载驱动，防止有些handler还在跑的时候被卸载了导致蓝屏。
+      LARGE_INTEGER inTime;
+  	inTime.QuadPart = 1000 * -10000;
+  	KeDelayExecutionThread(KernelMode, FALSE, &inTime);
   }
   
   BOOLEAN NtOpenProcess_callback(PGuestContext pcontext)
@@ -144,9 +148,9 @@
   运行结果如下
 
   ![image-20221206170555861](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206170555861.png)
-
+  
   设置fast_prehandler的代码如下
-
+  
   ```c
   VOID hook_NtOpenProcess()
   {
@@ -177,9 +181,9 @@
   运行结果如下
 
   ![image-20221206171227711](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206171227711.png)
-
+  
   这里在fast_prehandler中判断了 `rcx` 是否等于1，如果不等于1就直接走原流程，因此没有打印出任何信息。我们把他改为 `cmp rdx, 0x1000` 再试一下
-
+  
   ```c
   UCHAR buf[] = {
       0x48, 0x81, 0xFA ,0x00 ,0x10 ,0x00, 0x00, // cmp rdx, 0x1000
@@ -195,9 +199,9 @@
   ```
 
   
-
+  
   可以看到只有 `rdx` 为1000的时候才会进入到C语言编写的handler中。否则快速跳回到原流程中执行。
-
+  
   ![image-20221206171426253](https://cdn.jsdelivr.net/gh/smallzhong/new_new_new_picgo_picbed@main/image-20221206171426253.png)
 
 ## TODO
@@ -208,11 +212,15 @@
 - [x] 处理硬编码为 `0f 8x xx xx xx xx` 的四字节相对跳转
 - [x] 处理编码为 `e8(e9) xx xx xx xx` 的相对跳转指令
 - [ ] 处理其他使用了相对寻址的指令，如 `test，lea，mov` 等。
+- [ ] 当指令出现了无效的REX前缀时可以进行跳过，防止因无效的REX前缀导致hook失败（这种情况应该非常罕见，编译器不会随意给加上无效的REX前缀）
 - [ ] 使用SEH对函数大小进行判断，如果函数没有足够的空间，则返回失败
 - [ ] 如果函数已经被挂钩，要进行判断，防止运行了无法运行的代码导致抛出UD
 - [ ] 想办法对XMM寄存器也进行相应的保存。
 - [x] 保存环境的时候shellcode忘记加pushfq了，要加上。
 - [ ] 有可能出现别的地方跳到被hook的地方中间的情况，比如hook的时候修改了ABC三条指令，后面有代码跳转到了B这条指令的地址。由于已经inlinehook，这个地址上的内容已经不再是原来的代码，会引发不可预测的结果（无能为力了这个）
+- [ ] 释放内存的时候应该sleep一段时间再做。因为有可能还有callback没跑完。或者在callback开头和结尾都要求增减一个count，只有在count为0的时候再释放内存。
+- [ ] 想个办法把修改14字节填入ff25的操作做成原子操作？（好像没啥好办法）
+- [ ] 要想适配disp32的add test这种指令，估计只能是在PE节间隙里面找地方放东西了。可以直接在allocatememory函数里面改。这样的话就能直接改disp32的偏移达到目的了。如果是2GB以上的偏移，好像没有这种类似的指令能做到。如果用另外一个寄存器来达到目的的话又怕改变了寄存器的值导致无法预测的bug。
 
 ## 依赖
 
